@@ -4,7 +4,8 @@ const bodyParser = require("body-parser");
 const cors = require("cors");
 const mongoose = require("mongoose");
 
-const uri = process.env.MongoDbURI;
+const uri =
+  "mongodb+srv://rosskeene196:cqK6L7UsxwEDvWce@cluster0.kf5a24r.mongodb.net/?retryWrites=true&w=majority";
 
 mongoose
   .connect(uri, { useNewUrlParser: true, useUnifiedTopology: true })
@@ -38,32 +39,41 @@ const exercisesSchema = new Schema({
 
 const Exercises = mongoose.model("Exercises", exercisesSchema);
 
-app.post('/api/users', async function (req, res) {
-  if (req.body.username === '') {
-    return res.json({ error: 'username is required' });
+app.post("/api/users", function (req, res) {
+  if (req.body.username === "") {
+    return res.json({ error: "username is required" });
   }
 
-  const username = req.body.username;
+  let username = req.body.username;
 
-  try {
-    const existingUser = await ExerciseUsers.findOne({ username: username });
-    if (!existingUser) {
-      const newUser = new ExerciseUsers({
-        username: username,
-      });
+  ExerciseUsers.findOne({ username: username })
+    .then((data) => {
+      if (!data) {
+        let newUser = new ExerciseUsers({
+          username: username,
+          exercises: [], // Initialize the exercises property as an empty array
+        });
 
-      const savedUser = await newUser.save();
-      return res.json({
-        _id: savedUser._id,
-        username: savedUser.username,
-      });
-    } else {
-      return res.json({ error: 'username already exists' });
-    }
-  } catch (err) {
-    return res.json({ error: 'Error saving user to the database' });
-  }
+        newUser.save()
+          .then((savedUser) => {
+            return res.json({
+              _id: savedUser._id,
+              username: savedUser.username,
+              exercises: savedUser.exercises, // Initialize the exercises property as an empty array
+            });
+          })
+          .catch((err) => {
+            return res.json({ error: "Error saving user to the database" });
+          });
+      } else {
+        return res.json({ error: "username already exists" });
+      }
+    })
+    .catch((err) => {
+      return res.json({ error: "Error finding user in the database" });
+    });
 });
+
 
 app.get("/api/users", async function (req, res) {
   try {
@@ -73,6 +83,7 @@ app.get("/api/users", async function (req, res) {
     return res.json({ error: 'Error fetching users from the database' });
   }
 });
+
 
 app.post("/api/users/:_id/exercises", async function (req, res) {
   if (req.params._id === "0" || !mongoose.Types.ObjectId.isValid(req.params._id)) {
@@ -102,37 +113,38 @@ app.post("/api/users/:_id/exercises", async function (req, res) {
 
   try {
     const user = await ExerciseUsers.findById(userId);
-    if (user) {
-      const newExercise = new Exercises({
-        userId: userId,
-        description: description,
-        duration: duration,
-        date: date,
-      });
-
-      const savedExercise = await newExercise.save();
-      // Update the user object with the new exercise fields
-      user.exercises.push(savedExercise);
-      await user.save();
-
-      // Return the user object with the exercise fields added
-      return res.json({
-        _id: user._id,
-        username: user.username,
-        exercises: user.exercises.map((exercise) => ({
-          description: exercise.description,
-          duration: exercise.duration,
-          date: new Date(exercise.date).toDateString(),
-        })),
-      });
-    } else {
+    if (!user) {
       return res.json({ error: "user not found" });
     }
+
+    const newExercise = new Exercises({
+      userId: userId,
+      description: description,
+      duration: duration,
+      date: date,
+    });
+
+    const savedExercise = await newExercise.save();
+
+    // Update the user object with the new exercise fields
+    user.exercises.push(savedExercise);
+    await user.save();
+
+    // Return the updated user object with the exercise fields added
+    return res.json({
+      _id: user._id,
+      username: user.username,
+      exercises: user.exercises.map((exercise) => ({
+        description: exercise.description,
+        duration: exercise.duration,
+        date: exercise.date.toDateString(),
+      })),
+    });
   } catch (err) {
+    console.error("Error saving exercise:", err); // Log the error for debugging
     return res.json({ error: "Error saving exercise to the database" });
   }
 });
-
 
 app.get("/api/users/:_id/exercises", async function (req, res) {
   const userId = req.params._id;
@@ -172,25 +184,44 @@ app.get("/api/users/:_id/exercises", async function (req, res) {
 
   try {
     const user = await ExerciseUsers.findById(userId);
-    if (user) {
-      const exercises = await Exercises.find(findConditions).sort({ date: "asc" }).limit(limit);
-      return res.json({
-        _id: user._id,
-        username: user.username,
-        log: exercises.map((e) => ({
-          description: e.description,
-          duration: e.duration,
-          date: new Date(e.date).toDateString(),
-        })),
-        count: exercises.length,
-      });
-    } else {
+    if (!user) {
       return res.json({ error: "user not found" });
     }
+
+    const newExercise = new Exercises({
+      userId: userId,
+      description: description,
+      duration: duration,
+      date: date,
+    });
+
+    const savedExercise = await newExercise.save();
+
+    // Initialize the exercises array if it's not defined
+    if (!user.exercises) {
+      user.exercises = [];
+    }
+
+    // Update the user object with the new exercise fields
+    user.exercises.push(savedExercise);
+    await user.save();
+
+    // Return the updated user object with the exercise fields added
+    return res.json({
+      _id: user._id,
+      username: user.username,
+      exercises: user.exercises.map((exercise) => ({
+        description: exercise.description,
+        duration: exercise.duration,
+        date: exercise.date.toDateString(),
+      })),
+    });
   } catch (err) {
-    return res.json({ error: "Error finding user or exercises in the database" });
+    console.error("Error saving exercise:", err); // Log the error for debugging
+    return res.json({ error: "Error saving exercise to the database" });
   }
 });
+
 
 
 
